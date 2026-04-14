@@ -8,6 +8,33 @@ const TEAMS = [
   'Rajasthan Royals', 'Sunrisers Hyderabad', 'Lucknow Super Giants', 'Gujarat Titans',
 ];
 
+// Short team codes for the oval arena badges
+const TEAM_CODES = {
+  'Chennai Super Kings': 'CSK',
+  'Mumbai Indians': 'MI',
+  'Royal Challengers Bengaluru': 'RCB',
+  'Kolkata Knight Riders': 'KKR',
+  'Delhi Capitals': 'DC',
+  'Punjab Kings': 'PBKS',
+  'Rajasthan Royals': 'RR',
+  'Sunrisers Hyderabad': 'SRH',
+  'Lucknow Super Giants': 'LSG',
+  'Gujarat Titans': 'GT',
+};
+
+const TEAM_COLORS = {
+  'Chennai Super Kings': '#f9cd05',
+  'Mumbai Indians': '#004ba0',
+  'Royal Challengers Bengaluru': '#da1818',
+  'Kolkata Knight Riders': '#3a225d',
+  'Delhi Capitals': '#17449b',
+  'Punjab Kings': '#ed1b24',
+  'Rajasthan Royals': '#ea1a85',
+  'Sunrisers Hyderabad': '#fb643e',
+  'Lucknow Super Giants': '#00a0e4',
+  'Gujarat Titans': '#1b2133',
+};
+
 // Mirror of server/src/services/bidRules.js
 function nextBid(cur) {
   if (cur < 20) return 20;
@@ -32,7 +59,6 @@ export default function Room() {
   const { socket, room, priv, user, playersById, chat } = useStore();
   const [chatText, setChatText] = useState('');
 
-  // If we land here without a loaded room (e.g. refresh), ask the server.
   useEffect(() => {
     if (!socket) return;
     if (!room || room.id !== id) socket.emit('join_room', { roomId: id }, () => {});
@@ -53,31 +79,41 @@ export default function Room() {
         <h2>Room {room.id}</h2>
         <span className="pill">{room.status}</span>
         <span className="muted">{room.memberOrder.length}/{room.config.maxPlayers} players</span>
+        {room.status === 'auction' || room.status === 'sold' ? (
+          <span className="muted">Sold: {room.soldCount}/{room.poolSize}</span>
+        ) : null}
       </header>
 
       <div className="room-body">
         <aside className="sidebar">
-          <h3>Players</h3>
+          <Wallet priv={priv} />
+          <h3>Gamers</h3>
           <ul className="members">
             {room.memberOrder.map(uid => {
               const m = room.members[uid];
+              const color = m.team ? TEAM_COLORS[m.team] : '#888';
               return (
                 <li key={uid} className={uid === user.id ? 'me' : ''}>
-                  <strong>@{m.username}</strong>
-                  {uid === room.hostId && <span className="tag">host</span>}
-                  <div className="muted small">{m.team || 'no team'} · {m.squadSize}/11 · {m.connected ? '🟢' : '🔴'}</div>
+                  <div className="mem-row">
+                    <span className="team-dot" style={{ background: color }} />
+                    <strong>@{m.username}</strong>
+                    {uid === room.hostId && <span className="tag">host</span>}
+                  </div>
+                  <div className="muted small">
+                    {m.team ? TEAM_CODES[m.team] : 'no team'} · {m.squadSize}/11 · {m.connected ? '🟢' : '🔴'}
+                  </div>
                 </li>
               );
             })}
           </ul>
-          <Wallet priv={priv} />
           <Chat chat={chat} onSend={sendChat} text={chatText} setText={setChatText} />
         </aside>
 
         <section className="stage">
           {room.status === 'waiting' && <WaitingStage roomId={id} room={room} />}
-          {room.status === 'preview' && <PreviewStage room={room} playersById={playersById} />}
-          {room.status === 'auction' && <AuctionStage roomId={id} room={room} priv={priv} playersById={playersById} />}
+          {room.status === 'preview' && <PreviewStage room={room} />}
+          {room.status === 'auction' && <AuctionArena roomId={id} room={room} priv={priv} playersById={playersById} />}
+          {room.status === 'sold' && <SoldStage room={room} playersById={playersById} />}
           {room.status === 'captain' && <CaptainStage roomId={id} room={room} priv={priv} playersById={playersById} />}
           {room.status === 'completed' && <ResultStage room={room} playersById={playersById} />}
         </section>
@@ -119,7 +155,6 @@ function Chat({ chat, onSend, text, setText }) {
 function WaitingStage({ roomId, room }) {
   const { socket, user } = useStore();
   const takenBy = room.teams;
-  const myTeam = room.members[user.id]?.team;
   const isHost = room.hostId === user.id;
   const allPicked = room.memberOrder.every(uid => !!room.members[uid].team);
 
@@ -141,9 +176,12 @@ function WaitingStage({ roomId, room }) {
           const mine = owner === user.id;
           const taken = !!owner && !mine;
           return (
-            <button key={t} className={`team-btn ${mine ? 'mine' : ''} ${taken ? 'taken' : ''}`}
+            <button key={t}
+                    className={`team-btn ${mine ? 'mine' : ''} ${taken ? 'taken' : ''}`}
+                    style={{ borderColor: TEAM_COLORS[t] }}
                     disabled={taken} onClick={() => pick(t)}>
-              <div>{t}</div>
+              <div className="team-name">{t}</div>
+              <div className="small muted">{TEAM_CODES[t]}</div>
               {owner && <div className="small">@{room.members[owner]?.username}</div>}
             </button>
           );
@@ -159,32 +197,34 @@ function WaitingStage({ roomId, room }) {
   );
 }
 
-// ---------------- Preview ----------------
-function PreviewStage({ room, playersById }) {
+// ---------------- Preview (full pool) ----------------
+function PreviewStage({ room }) {
   const sec = useCountdown(room.previewEndsAt);
+  const pool = room.playerPool || [];
   return (
     <div>
-      <h3>Player preview — auction starts in {sec ?? '…'}s</h3>
-      <div className="player-preview">
-        {(room.currentPlayer ? [] : [] /* preview shows pool below */)}
+      <div className="preview-head">
+        <h3>Player preview</h3>
+        <span className="big accent">{sec ?? '…'}s</span>
       </div>
-      <PreviewPool room={room} playersById={playersById} />
+      <p className="muted">
+        {pool.length} players are going under the hammer. Study the list — the auction order will be random.
+      </p>
+      <div className="pool-grid">
+        {pool.map((p, i) => (
+          <div key={p.id} className="pool-card">
+            <div className="pool-idx">#{i + 1}</div>
+            <div className="pool-name">{p.name}</div>
+            <div className="pool-rating">⭐ {p.rating}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function PreviewPool({ room, playersById }) {
-  // pool not sent directly; show from players catalog via known pool size is fine.
-  // Server's publicState includes currentPlayer but not full pool for privacy — show nothing fancy.
-  return (
-    <div className="muted">
-      Pool of {room.poolSize} players will be auctioned. Get ready!
-    </div>
-  );
-}
-
-// ---------------- Auction ----------------
-function AuctionStage({ roomId, room, priv, playersById }) {
+// ---------------- Auction Arena (oval) ----------------
+function AuctionArena({ roomId, room, priv, playersById }) {
   const { socket, user } = useStore();
   const sec = useCountdown(room.biddingEndsAt);
   const player = room.currentPlayer ? (playersById[room.currentPlayer.id] || room.currentPlayer) : null;
@@ -192,6 +232,7 @@ function AuctionStage({ roomId, room, priv, playersById }) {
   const required = curAmount === 0 ? 20 : nextBid(curAmount);
   const leading = room.currentBid?.bidderId;
   const leaderName = leading ? room.members[leading]?.username : null;
+  const leaderTeam = leading ? room.members[leading]?.team : null;
   const [pending, setPending] = useState(false);
 
   const canBid = useMemo(() => {
@@ -209,32 +250,62 @@ function AuctionStage({ roomId, room, priv, playersById }) {
     });
   }
 
+  const members = room.memberOrder;
+  const n = members.length;
+
   if (!player) return <div>Waiting…</div>;
 
   return (
-    <div className="auction">
-      <div className={`player-card ${leading === user.id ? 'me-leading' : ''}`}>
-        <div className="ptop">
-          <div className="pname">{player.name}</div>
-          <div className="prating">⭐ {player.rating}</div>
-        </div>
-        <div className="pbid">
-          <div>
+    <div className="arena-wrap">
+      <div className="arena">
+        {/* Team tokens positioned around an ellipse */}
+        {members.map((uid, i) => {
+          const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
+          const rx = 44; // percent from center
+          const ry = 40;
+          const x = 50 + rx * Math.cos(angle);
+          const y = 50 + ry * Math.sin(angle);
+          const m = room.members[uid];
+          const team = m.team;
+          const isLeader = leading === uid;
+          const isMe = user.id === uid;
+          return (
+            <div key={uid}
+                 className={`team-token ${isLeader ? 'leading' : ''} ${isMe ? 'me' : ''} ${m.connected ? '' : 'off'}`}
+                 style={{ left: `${x}%`, top: `${y}%`, '--team-color': TEAM_COLORS[team] || '#555' }}>
+              <div className="tt-code">{TEAM_CODES[team] || '?'}</div>
+              <div className="tt-name">@{m.username}</div>
+              <div className="tt-stat">{m.squadSize}/11</div>
+              {isLeader && <div className="tt-tag">LEADING</div>}
+            </div>
+          );
+        })}
+
+        {/* Center: current player + bid */}
+        <div className={`arena-center ${leading === user.id ? 'me-leading' : ''}`}>
+          <div className="ac-label small muted">NOW BIDDING</div>
+          <div className="ac-name">{player.name}</div>
+          <div className="ac-rating">⭐ {player.rating}</div>
+          <div className="ac-bid">
             <div className="muted small">Highest bid</div>
-            <div className="big">₹{curAmount}L</div>
-            <div className="muted small">{leaderName ? `by @${leaderName}` : 'no bids yet'}</div>
+            <div className="big accent">₹{curAmount}L</div>
+            <div className="muted small">
+              {leaderName
+                ? <>by <strong>@{leaderName}</strong>{leaderTeam ? ` (${TEAM_CODES[leaderTeam]})` : ''}</>
+                : 'no bids yet'}
+            </div>
           </div>
-          <div className="timer">
+          <div className="ac-timer">
             <div className="muted small">Time</div>
-            <div className="big">{sec ?? '-'}s</div>
+            <div className="big timer-num">{sec ?? '-'}s</div>
           </div>
+          <button className="bid-btn" disabled={!canBid || pending} onClick={bid}>
+            {pending ? 'Pending…' : `BID ₹${required}L`}
+          </button>
+          {!canBid && leading !== user.id && (
+            <div className="muted small">Budget-locked or cannot bid right now</div>
+          )}
         </div>
-        <button className="bid-btn" disabled={!canBid || pending} onClick={bid}>
-          {pending ? 'Pending…' : `Bid ₹${required}L`}
-        </button>
-        {!canBid && leading !== user.id && (
-          <div className="muted small">Budget-locked or cannot bid right now</div>
-        )}
       </div>
 
       <SquadList priv={priv} playersById={playersById} />
@@ -250,9 +321,32 @@ function SquadList({ priv, playersById }) {
       <ul>
         {(priv.squad || []).map(pid => {
           const p = playersById[pid];
-          return <li key={pid}>{p ? `${p.name} (⭐${p.rating})` : pid}</li>;
+          return <li key={pid}>{p ? `${p.name} · ⭐${p.rating}` : pid}</li>;
         })}
       </ul>
+    </div>
+  );
+}
+
+// ---------------- Sold ----------------
+function SoldStage({ room, playersById }) {
+  const sold = room.lastSold;
+  const sec = useCountdown(room.nextAuctionAt);
+  if (!sold) return <div className="card">Processing…</div>;
+  const color = TEAM_COLORS[sold.team] || '#555';
+  return (
+    <div className="sold-wrap">
+      <div className="sold-card" style={{ borderColor: color, boxShadow: `0 0 60px ${color}66` }}>
+        <div className="sold-stamp">SOLD</div>
+        <div className="sold-player">{sold.playerName}</div>
+        <div className="sold-rating">⭐ {sold.playerRating}</div>
+        <div className="sold-to">
+          to <span className="sold-team" style={{ color }}>{TEAM_CODES[sold.team] || '—'}</span>
+        </div>
+        <div className="sold-user">@{sold.bidderName}</div>
+        <div className="sold-amount">₹{sold.amount}L {sold.auto && <span className="muted small">(auto-assigned)</span>}</div>
+        <div className="muted small">Next player in {sec ?? '…'}s</div>
+      </div>
     </div>
   );
 }

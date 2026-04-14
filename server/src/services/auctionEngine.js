@@ -33,6 +33,8 @@ const TEAMS = [
 
 const PREVIEW_MS = 60 * 1000;
 const GRACE_MS = 30 * 1000;
+const INITIAL_BID_MS = 20 * 1000;   // timer when a new player comes up
+const SOLD_PAUSE_MS = 10 * 1000;    // pause showing "sold to X" before next player
 
 // io reference, injected on init
 let io = null;
@@ -57,12 +59,15 @@ function publicState(room) {
     ),
     memberOrder: room.memberOrder,
     teams: room.teams,
+    playerPool: room.playerPool || null,   // expose whole pool for preview
     currentIdx: room.currentIdx,
     currentPlayer: room.playerPool && room.currentIdx != null ? room.playerPool[room.currentIdx] : null,
     currentBid: room.currentBid,
     bidVersion: room.bidVersion,
     previewEndsAt: room.previewEndsAt,
     biddingEndsAt: room.biddingEndsAt,
+    lastSold: room.lastSold || null,        // for the 10s 'sold' display
+    nextAuctionAt: room.nextAuctionAt || null,
     poolSize: room.playerPool ? room.playerPool.length : 0,
     soldCount: room.soldLog ? room.soldLog.length : 0,
   };
@@ -219,7 +224,10 @@ function beginNextPlayer(room) {
   room.currentBid = null;
   room.bidVersion += 1;
   room.status = 'auction';
-  room.biddingEndsAt = Date.now() + room.config.timerSec * 1000;
+  room.lastSold = null;
+  room.nextAuctionAt = null;
+  // First bid window is longer so people can react to a new player
+  room.biddingEndsAt = Date.now() + INITIAL_BID_MS;
   saveSnapshot(room.id);
   emitState(room);
   scheduleTimerEnd(room);
@@ -261,6 +269,25 @@ function placeBid(room, userId, { amount, bidVersion }) {
   return { ok: true };
 }
 
+function recordSold(room, { player, bidderId, amount, auto, forced }) {
+  const m = room.members[bidderId];
+  room.lastSold = {
+    playerId: player.id,
+    playerName: player.name,
+    playerRating: player.rating,
+    bidderId,
+    bidderName: m?.username || null,
+    team: m?.team || null,
+    amount,
+    auto: !!auto,
+    forced: !!forced,
+  };
+  room.status = 'sold';
+  room.nextAuctionAt = Date.now() + SOLD_PAUSE_MS;
+  room.currentBid = null; // lock bidding during pause
+  room.bidVersion += 1;
+}
+
 function onTimerEnd(room) {
   if (room.status !== 'auction') return;
   const player = room.playerPool[room.currentIdx];
@@ -271,6 +298,7 @@ function onTimerEnd(room) {
     m.squad.push(player.id);
     room.soldLog.push({ playerId: player.id, bidderId, amount });
     io.to(room.id).emit('player_sold', { playerId: player.id, bidderId, amount, auto: false });
+    recordSold(room, { player, bidderId, amount, auto: false });
   } else {
     // auto-sell: pick user with smallest squad who can afford base price and hasn't filled
     const eligible = room.memberOrder
@@ -284,6 +312,7 @@ function onTimerEnd(room) {
       m.squad.push(player.id);
       room.soldLog.push({ playerId: player.id, bidderId: uid, amount: BASE_PRICE });
       io.to(room.id).emit('player_sold', { playerId: player.id, bidderId: uid, amount: BASE_PRICE, auto: true });
+      recordSold(room, { player, bidderId: uid, amount: BASE_PRICE, auto: true });
     } else {
       // nobody can afford — force-assign to smallest squad regardless (deadlock break)
       const order = room.memberOrder
@@ -293,18 +322,19 @@ function onTimerEnd(room) {
         const uid = order[0];
         const m = room.members[uid];
         m.squad.push(player.id);
-        // wallet not deducted below zero, pay what they have
         const paid = Math.min(m.wallet, BASE_PRICE);
         m.wallet -= paid;
         room.soldLog.push({ playerId: player.id, bidderId: uid, amount: paid, forced: true });
         io.to(room.id).emit('player_sold', { playerId: player.id, bidderId: uid, amount: paid, auto: true, forced: true });
+        recordSold(room, { player, bidderId: uid, amount: paid, auto: true, forced: true });
       }
     }
   }
   emitPrivateAll(room);
+  emitState(room);
   saveSnapshot(room.id);
-  // short pause then next
-  setTimeoutSafe(room, 1500, () => beginNextPlayer(room));
+  // 10s pause showing "sold to X" before the next player
+  setTimeoutSafe(room, SOLD_PAUSE_MS, () => beginNextPlayer(room));
 }
 
 // ---------- end of auction ----------
