@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from './store';
 import { api } from './api';
 import Login from './pages/Login.jsx';
@@ -35,7 +35,9 @@ function RequireAuth({ children }) {
 }
 
 export default function App() {
-  const { token, connectSocket, setPlayers } = useStore();
+  const { token, connectSocket, setPlayers, socket } = useStore();
+  const nav = useNavigate();
+  const loc = useLocation();
 
   useEffect(() => {
     api.players().then(r => setPlayers(r.players)).catch(() => {});
@@ -44,6 +46,18 @@ export default function App() {
   useEffect(() => {
     if (token) connectSocket();
   }, [token, connectSocket]);
+
+  // If the server tells us we already belong to an active room, jump there.
+  // This fires after login/reconnect when the user was mid-auction.
+  useEffect(() => {
+    if (!socket) return;
+    const onActive = ({ roomId }) => {
+      const target = `/room/${roomId}`;
+      if (loc.pathname !== target) nav(target);
+    };
+    socket.on('your_active_room', onActive);
+    return () => socket.off('your_active_room', onActive);
+  }, [socket, nav, loc.pathname]);
 
   return (
     <div className="app">

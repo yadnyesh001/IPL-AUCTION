@@ -49,11 +49,14 @@ function attachSockets(io) {
     // Personal channel used for private_state events
     socket.join(`user:${userId}`);
 
-    // Find any room this user belongs to and auto-rejoin
+    // Find any room this user belongs to and auto-rejoin.
+    // Tell the client so it can navigate them back into the live game.
     for (const room of listRooms()) {
       if (room.members[userId]) {
         socket.join(room.id);
         engine.handleReconnect(room, userId);
+        socket.emit('your_active_room', { roomId: room.id, status: room.status });
+        break; // a user is only ever in one room
       }
     }
 

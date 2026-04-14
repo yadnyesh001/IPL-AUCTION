@@ -57,6 +57,10 @@ export const useStore = create((set, get) => ({
       if (!r.accepted) get().toastMsg(`Bid rejected: ${r.reason}`);
     });
     s.on('player_sold', (e) => {
+      // Only toast while the user is actually on the room page — otherwise
+      // a freshly-logged-in user sitting on the lobby sees phantom notifications
+      // from a game they were auto-bidding into.
+      if (!window.location.pathname.startsWith('/room/')) return;
       const p = get().playersById[e.playerId];
       const m = get().room?.members?.[e.bidderId];
       get().toastMsg(`${p?.name || e.playerId} → ${m?.username || 'someone'} @ ₹${e.amount}L${e.auto ? ' (auto)' : ''}`);
