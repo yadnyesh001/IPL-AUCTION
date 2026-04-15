@@ -55,6 +55,7 @@ function publicState(room) {
         team: m.team,
         squadSize: m.squad.length,
         connected: m.connected,
+        abandoned: !!m.abandoned,
       }])
     ),
     memberOrder: room.memberOrder,
@@ -125,8 +126,11 @@ function createRoom({ hostId, hostUsername, maxPlayers = 10, timerSec = 10 }) {
 
 function addMember(room, userId, username) {
   if (room.members[userId]) {
-    room.members[userId].connected = true;
-    room.members[userId].disconnectedAt = null;
+    const m = room.members[userId];
+    // If they previously abandoned, block re-entry to the same room.
+    if (m.abandoned) throw new Error('you left this game');
+    m.connected = true;
+    m.disconnectedAt = null;
     return;
   }
   if (room.status !== 'waiting') throw new Error('room already started');
@@ -138,8 +142,28 @@ function addMember(room, userId, username) {
     squad: [],
     connected: true,
     disconnectedAt: null,
+    abandoned: false,
   };
   room.memberOrder.push(userId);
+}
+
+// Explicit "leave game" — different from logout/disconnect.
+// The user stays in the room financially (auto-bids continue for them),
+// but they can never rejoin this room and they don't get auto-routed back.
+function abandonGame(room, userId) {
+  const m = room.members[userId];
+  if (!m) throw new Error('not in room');
+  m.abandoned = true;
+  m.connected = false;
+  m.disconnectedAt = Date.now();
+  // transfer host if they were the host
+  if (room.hostId === userId) {
+    const alt = room.memberOrder.find(u => u !== userId && !room.members[u]?.abandoned);
+    if (alt) room.hostId = alt;
+  }
+  saveSnapshot(room.id);
+  emitState(room);
+  return true;
 }
 
 function removeMember(room, userId) {
@@ -250,6 +274,7 @@ function placeBid(room, userId, { amount, bidVersion }) {
   if (room.status !== 'auction') return { ok: false, reason: 'not_in_auction' };
   const m = room.members[userId];
   if (!m) return { ok: false, reason: 'not_in_room' };
+  if (m.abandoned) return { ok: false, reason: 'abandoned' };
   if (!m.connected) return { ok: false, reason: 'disconnected' };
   if (bidVersion != null && bidVersion !== room.bidVersion) return { ok: false, reason: 'stale_bid' };
 
@@ -411,6 +436,7 @@ module.exports = {
   pickTeam,
   startAuction,
   placeBid,
+  abandonGame,
   handleDisconnect,
   handleReconnect,
   publicState,

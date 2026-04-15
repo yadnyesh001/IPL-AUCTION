@@ -50,13 +50,14 @@ function attachSockets(io) {
     socket.join(`user:${userId}`);
 
     // Find any room this user belongs to and auto-rejoin.
-    // Tell the client so it can navigate them back into the live game.
+    // Skip rooms they explicitly abandoned — those should not drag them back.
     for (const room of listRooms()) {
-      if (room.members[userId]) {
+      const m = room.members[userId];
+      if (m && !m.abandoned) {
         socket.join(room.id);
         engine.handleReconnect(room, userId);
         socket.emit('your_active_room', { roomId: room.id, status: room.status });
-        break; // a user is only ever in one room
+        break;
       }
     }
 
@@ -88,6 +89,19 @@ function attachSockets(io) {
         const room = getRoom(roomId);
         if (!room) return cb?.({ ok: true });
         engine.removeMember(room, userId);
+        socket.leave(roomId);
+        cb?.({ ok: true });
+      } catch (e) { cb?.({ ok: false, error: e.message }); }
+    });
+
+    // Explicit "leave game mid-auction". Different from leave_room (which is
+    // only valid while waiting). Keeps the user's seat in the room so auto-bids
+    // continue, but blocks them from rejoining or being auto-routed back.
+    socket.on('abandon_room', ({ roomId }, cb) => {
+      try {
+        const room = getRoom(roomId);
+        if (!room) throw new Error('room not found');
+        engine.abandonGame(room, userId);
         socket.leave(roomId);
         cb?.({ ok: true });
       } catch (e) { cb?.({ ok: false, error: e.message }); }
