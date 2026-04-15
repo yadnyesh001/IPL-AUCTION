@@ -2,7 +2,7 @@
 //
 // State shape per room:
 // {
-//   id, hostId, status: 'waiting'|'preview'|'auction'|'captain'|'completed',
+//   id, hostId, status: 'waiting'|'preview'|'auction'|'sold'|'completed',
 //   config: { timerSec, maxPlayers },
 //   members: { [userId]: { username, team, wallet, squad:[playerId], connected, disconnectedAt } },
 //   memberOrder: [userId],
@@ -14,7 +14,7 @@
 //   previewEndsAt, biddingEndsAt,
 //   soldLog: [{ playerId, bidderId, amount }],
 //   chat: [{ userId, username, text, ts }],
-//   captains: { [userId]: { captain, viceCaptain } },
+//   lastSold: { playerName, bidderName, team, amount } | null,
 //   _timer: Timeout (not serialized)
 // }
 
@@ -116,7 +116,6 @@ function createRoom({ hostId, hostUsername, maxPlayers = 10, timerSec = 10 }) {
     biddingEndsAt: null,
     soldLog: [],
     chat: [],
-    captains: {},
   };
   addMember(room, hostId, hostUsername);
   setRoom(id, room);
@@ -340,79 +339,39 @@ function onTimerEnd(room) {
 // ---------- end of auction ----------
 
 function finishAuction(room) {
-  room.status = 'captain';
+  // Auction done → straight to scoring. No captain phase.
   room.currentBid = null;
   room.currentIdx = null;
   room.biddingEndsAt = null;
-  // 20s to pick; then auto-assign
-  const pickEndsAt = Date.now() + 20000;
-  room.pickEndsAt = pickEndsAt;
-  saveSnapshot(room.id);
-  emitState(room);
+  room.lastSold = null;
+  room.nextAuctionAt = null;
   io.to(room.id).emit('auction_complete');
-
-  setTimeoutSafe(room, 20000, () => {
-    for (const uid of room.memberOrder) {
-      if (!room.captains[uid]) autoAssignCaptains(room, uid);
-    }
-    completeGame(room);
-  });
-}
-
-function autoAssignCaptains(room, userId) {
-  const m = room.members[userId];
-  const sorted = m.squad
-    .map(pid => PLAYERS.find(p => p.id === pid))
-    .filter(Boolean)
-    .sort((a, b) => b.rating - a.rating);
-  if (sorted.length === 0) return;
-  const cap = sorted[0].id;
-  const vc = sorted[1] ? sorted[1].id : null;
-  room.captains[userId] = { captain: cap, viceCaptain: vc };
-}
-
-function pickCaptains(room, userId, { captain, viceCaptain }) {
-  if (room.status !== 'captain') throw new Error('not in captain phase');
-  const m = room.members[userId];
-  if (!m) throw new Error('not in room');
-  if (!m.squad.includes(captain)) throw new Error('captain not in squad');
-  if (viceCaptain && !m.squad.includes(viceCaptain)) throw new Error('vc not in squad');
-  if (captain === viceCaptain) throw new Error('captain and vc must differ');
-  room.captains[userId] = { captain, viceCaptain: viceCaptain || null };
-  saveSnapshot(room.id);
-  emitState(room);
+  completeGame(room);
 }
 
 function completeGame(room) {
   room.status = 'completed';
-  // compute scores
   const results = room.memberOrder.map(uid => {
     const m = room.members[uid];
-    const caps = room.captains[uid] || {};
-    const squadPlayers = m.squad.map(pid => PLAYERS.find(p => p.id === pid)).filter(Boolean);
-    const capRating = caps.captain ? (PLAYERS.find(p => p.id === caps.captain)?.rating || 0) : 0;
-    const vcRating = caps.viceCaptain ? (PLAYERS.find(p => p.id === caps.viceCaptain)?.rating || 0) : 0;
+    const squadPlayers = m.squad
+      .map(pid => PLAYERS.find(p => p.id === pid))
+      .filter(Boolean);
     const sumRating = squadPlayers.reduce((s, p) => s + p.rating, 0);
-    // Formula per spec: total = Σ ratings + 2*captain + 1.5*viceCaptain
-    const totalPoints = +(sumRating + 2 * capRating + 1.5 * vcRating).toFixed(2);
+    const totalPoints = +sumRating.toFixed(2);
     return {
       userId: uid,
       username: m.username,
       team: m.team,
       totalPoints,
       sumRating: +sumRating.toFixed(2),
-      captainRating: capRating,
-      viceCaptainRating: vcRating,
-      captain: caps.captain,
-      viceCaptain: caps.viceCaptain,
       squad: squadPlayers,
       remainingBudget: m.wallet,
     };
   });
+  // Tie-break: total points → squad size → remaining budget.
   results.sort((a, b) =>
     b.totalPoints - a.totalPoints ||
-    b.captainRating - a.captainRating ||
-    b.sumRating - a.sumRating ||
+    b.squad.length - a.squad.length ||
     b.remainingBudget - a.remainingBudget
   );
   room.leaderboard = results;
@@ -452,7 +411,6 @@ module.exports = {
   pickTeam,
   startAuction,
   placeBid,
-  pickCaptains,
   handleDisconnect,
   handleReconnect,
   publicState,

@@ -121,16 +121,6 @@ function attachSockets(io) {
       cb?.(result);
     });
 
-    // ---------------- CAPTAINS ----------------
-    socket.on('pick_captains', ({ roomId, captain, viceCaptain }, cb) => {
-      try {
-        const room = getRoom(roomId);
-        if (!room) throw new Error('room not found');
-        engine.pickCaptains(room, userId, { captain, viceCaptain });
-        cb?.({ ok: true });
-      } catch (e) { cb?.({ ok: false, error: e.message }); }
-    });
-
     // ---------------- CHAT ----------------
     socket.on('chat', ({ roomId, text }) => {
       const room = getRoom(roomId);

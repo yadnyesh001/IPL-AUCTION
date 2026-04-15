@@ -66,7 +66,7 @@ export const useStore = create((set, get) => ({
       get().toastMsg(`${p?.name || e.playerId} → ${m?.username || 'someone'} @ ₹${e.amount}L${e.auto ? ' (auto)' : ''}`);
     });
     s.on('leaderboard', (lb) => set({ leaderboard: lb }));
-    s.on('auction_complete', () => get().toastMsg('Auction complete! Pick captains.'));
+    s.on('auction_complete', () => get().toastMsg('Auction complete! Calculating results…'));
 
     set({ socket: s });
   },

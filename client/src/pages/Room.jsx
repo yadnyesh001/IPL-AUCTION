@@ -114,7 +114,6 @@ export default function Room() {
           {room.status === 'preview' && <PreviewStage room={room} />}
           {room.status === 'auction' && <AuctionArena roomId={id} room={room} priv={priv} playersById={playersById} />}
           {room.status === 'sold' && <SoldStage room={room} playersById={playersById} />}
-          {room.status === 'captain' && <CaptainStage roomId={id} room={room} priv={priv} playersById={playersById} />}
           {room.status === 'completed' && <ResultStage room={room} playersById={playersById} />}
         </section>
       </div>
@@ -351,45 +350,6 @@ function SoldStage({ room, playersById }) {
   );
 }
 
-// ---------------- Captain pick ----------------
-function CaptainStage({ roomId, room, priv, playersById }) {
-  const { socket } = useStore();
-  const [cap, setCap] = useState('');
-  const [vc, setVc] = useState('');
-  const [done, setDone] = useState(false);
-
-  const options = (priv?.squad || []).map(pid => playersById[pid]).filter(Boolean);
-
-  function save() {
-    if (!cap) return alert('Pick a captain');
-    if (cap === vc) return alert('VC must differ');
-    socket.emit('pick_captains', { roomId, captain: cap, viceCaptain: vc || null }, (res) => {
-      if (res.ok) setDone(true); else alert(res.error);
-    });
-  }
-
-  return (
-    <div className="card">
-      <h3>Pick Captain & Vice Captain</h3>
-      <p className="muted">Captain scores 2× rating, Vice Captain scores 1.5×.</p>
-      <label>Captain
-        <select value={cap} onChange={e => setCap(e.target.value)}>
-          <option value="">—</option>
-          {options.map(p => <option key={p.id} value={p.id}>{p.name} (⭐{p.rating})</option>)}
-        </select>
-      </label>
-      <label>Vice Captain
-        <select value={vc} onChange={e => setVc(e.target.value)}>
-          <option value="">—</option>
-          {options.filter(p => p.id !== cap).map(p => <option key={p.id} value={p.id}>{p.name} (⭐{p.rating})</option>)}
-        </select>
-      </label>
-      <button disabled={done} onClick={save}>{done ? 'Locked in ✓' : 'Confirm'}</button>
-      <p className="muted small">Auto-assign if not submitted in time.</p>
-    </div>
-  );
-}
-
 // ---------------- Result ----------------
 function ResultStage({ room, playersById }) {
   const lb = useStore(s => s.leaderboard);
@@ -403,15 +363,23 @@ function ResultStage({ room, playersById }) {
             <div className="lb-head">
               <span className="rank">#{i + 1}</span>
               <strong>@{r.username}</strong>
-              <span className="muted">{r.team}</span>
+              <span className="muted">{TEAM_CODES[r.team] || r.team}</span>
               <span className="points">{r.totalPoints} pts</span>
             </div>
             <div className="muted small">
-              Captain: {playersById[r.captain]?.name || '—'} ·
-              VC: {playersById[r.viceCaptain]?.name || '—'} ·
-              Squad Σ: {r.sumRating} ·
-              Wallet left: ₹{r.remainingBudget}L
+              Squad: {r.squad.length} players · Wallet left: ₹{r.remainingBudget}L
             </div>
+            <details className="lb-squad">
+              <summary>View squad</summary>
+              <ul>
+                {r.squad
+                  .slice()
+                  .sort((a, b) => b.rating - a.rating)
+                  .map(p => (
+                    <li key={p.id}>{p.name} · ⭐{p.rating}</li>
+                  ))}
+              </ul>
+            </details>
           </li>
         ))}
       </ol>
