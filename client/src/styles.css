@@ -20,7 +20,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #root { height: 100%; margin: 0; }
+html, body, #root { height: 100%; margin: 0; overflow: hidden; }
 body {
   font-family: 'Inter', -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   background:
@@ -64,33 +64,50 @@ button.primary {
   box-shadow: 0 4px 14px rgba(34,197,94,0.25), inset 0 -2px 0 rgba(0,0,0,0.2);
 }
 
-.app { min-height: 100%; display: flex; flex-direction: column; }
+.app { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 .nav {
   display: flex; align-items: center; gap: 14px;
-  padding: 14px 28px;
+  padding: 10px 28px;
   border-bottom: 1px solid var(--border);
   background: rgba(11,14,31,0.7);
   backdrop-filter: blur(12px);
-  position: sticky; top: 0; z-index: 5;
+  flex-shrink: 0;
+  z-index: 5;
 }
-.brand { font-weight: 800; font-size: 1.25rem; color: var(--text); }
+.brand { font-weight: 800; font-size: 1.15rem; color: var(--text); }
 .spacer { flex: 1; }
 .muted { color: var(--muted); }
 .small { font-size: 0.82rem; }
 .accent { color: var(--accent); }
-main { padding: 28px; max-width: 1280px; width: 100%; margin: 0 auto; }
+main {
+  padding: 14px 20px;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+main > * { min-height: 0; }
+/* Non-room pages (lobby/login) get their own scroll if taller than viewport */
+main > .grid-2,
+main > .center { overflow-y: auto; flex: 1; align-content: start; }
 
 /* ---------- Cards / forms ---------- */
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 24px;
-  margin-bottom: 16px;
+  padding: 20px;
+  margin-bottom: 14px;
   box-shadow: 0 20px 40px rgba(0,0,0,0.3);
 }
 .card h1, .card h2 { margin-top: 0; }
-.center { max-width: 440px; margin: 48px auto; }
+.center { max-width: 440px; margin: 24px auto; }
+/* Lobby / non-room pages scroll internally so only the panels flex */
+.lobby-scroll { overflow-y: auto; flex: 1; min-height: 0; padding-right: 6px; }
 label { display: block; margin: 12px 0; color: var(--muted); font-size: 0.88rem; }
 input, select {
   width: 100%;
@@ -137,27 +154,37 @@ input:focus, select:focus {
   border: 1px solid var(--border);
   border-left: 4px solid var(--warn);
   border-radius: 10px;
-  padding: 12px 16px;
-  margin-bottom: 14px;
-  font-size: 0.9rem;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  font-size: 0.85rem;
+  flex-shrink: 0;
 }
 .banner.warn { border-left-color: var(--warn); }
 
 /* ---------- Room layout ---------- */
+.room {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+}
 .room-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  margin-bottom: 14px;
-  padding: 14px 18px;
+  margin-bottom: 10px;
+  padding: 10px 16px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
+  flex-shrink: 0;
 }
 .rh-left, .rh-right { display: flex; align-items: center; gap: 14px; }
 .rh-code { display: flex; flex-direction: column; line-height: 1; gap: 4px; }
-.rh-id { font-weight: 800; font-size: 1.2rem; letter-spacing: 2px; color: var(--accent); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.rh-id { font-weight: 800; font-size: 1.1rem; letter-spacing: 2px; color: var(--accent); font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.room-head button { padding: 7px 14px; font-size: 0.85rem; }
 .pill {
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -174,7 +201,14 @@ input:focus, select:focus {
 .pill.status-sold { color: var(--accent-2); border-color: rgba(255,77,109,0.35); }
 .pill.status-completed { color: var(--ok); }
 
-.room-body { display: grid; grid-template-columns: 300px 1fr; gap: 16px; }
+.room-body {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
 @media (max-width: 1000px) { .room-body { grid-template-columns: 1fr; } }
 
 /* ---------- Sidebar ---------- */
@@ -182,19 +216,32 @@ input:focus, select:focus {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 18px;
+  padding: 14px;
   box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
-.sidebar h3 { margin: 16px 0 10px; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); }
+.sidebar h3 { margin: 10px 0 6px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); flex-shrink: 0; }
 .sidebar h3:first-child { margin-top: 0; }
+.sidebar .wallet { flex-shrink: 0; }
+.sidebar .bid-feed { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+.sidebar .chat { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
 
-.members { list-style: none; padding: 0; margin: 0 0 12px; }
+.members {
+  list-style: none; padding: 0; margin: 0 0 6px;
+  overflow-y: auto;
+  flex: 0 1 auto;
+  max-height: 30vh;
+}
 .members li {
-  padding: 10px 12px;
+  padding: 7px 10px;
   border-radius: 10px;
   background: var(--panel-2);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   transition: background 0.15s;
+  font-size: 0.85rem;
 }
 .members li.me { background: linear-gradient(180deg, rgba(245,166,35,0.12), rgba(245,166,35,0.04)); outline: 1px solid rgba(245,166,35,0.4); }
 .members li.gone { opacity: 0.45; }
@@ -215,12 +262,12 @@ input:focus, select:focus {
 /* ---------- Wallet ---------- */
 .wallet {
   background: linear-gradient(135deg, #1a2048 0%, #111436 100%);
-  padding: 14px;
+  padding: 10px 12px;
   border-radius: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   border: 1px solid var(--border);
 }
-.wallet .big { font-size: 1.8rem; font-weight: 800; margin: 4px 0 8px; }
+.wallet .big { font-size: 1.4rem; font-weight: 800; margin: 2px 0 6px; }
 .wallet-bar {
   height: 6px;
   background: var(--panel-3);
@@ -236,13 +283,14 @@ input:focus, select:focus {
 
 /* ---------- Bid history feed ---------- */
 .bid-feed-log {
-  max-height: 180px;
+  flex: 1 1 auto;
+  min-height: 60px;
   overflow-y: auto;
   background: var(--panel-2);
   border-radius: 10px;
-  padding: 10px;
-  font-size: 0.82rem;
-  margin-bottom: 12px;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  margin-bottom: 8px;
 }
 .bid-feed-row {
   padding: 4px 0;
@@ -254,12 +302,13 @@ input:focus, select:focus {
 
 /* ---------- Chat ---------- */
 .chat-log {
-  height: 140px;
+  flex: 1 1 auto;
+  min-height: 60px;
   overflow-y: auto;
   background: var(--panel-2);
-  padding: 10px;
+  padding: 8px 10px;
   border-radius: 10px;
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   margin-bottom: 6px;
 }
 
@@ -268,10 +317,17 @@ input:focus, select:focus {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 22px;
-  min-height: 500px;
+  padding: 16px;
   box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
+.stage > div { min-height: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.stage > div.card { display: flex; overflow-y: auto; }
+/* WaitingStage has no dedicated class — scroll the stage child for it */
+.stage > div:not(.arena-wrap):not(.sold-wrap):not(.card) { overflow-y: auto; }
 
 /* ---------- Team selection grid ---------- */
 .team-grid {
@@ -314,20 +370,22 @@ input:focus, select:focus {
 
 .pool-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 10px;
-  max-height: 560px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 4px;
+  align-content: start;
 }
 .pool-card {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   background: var(--panel-2);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px 12px;
+  border-radius: 10px;
+  padding: 7px 10px;
   position: relative;
   transition: transform 0.15s, border-color 0.2s, box-shadow 0.2s;
 }
@@ -366,13 +424,22 @@ input:focus, select:focus {
 }
 
 /* ---------- Oval arena ---------- */
-.arena-wrap { display: grid; grid-template-columns: 1fr 280px; gap: 16px; }
+.arena-wrap {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 14px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
 @media (max-width: 1100px) { .arena-wrap { grid-template-columns: 1fr; } }
 
 .arena {
   position: relative;
   width: 100%;
-  height: 600px;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
   border-radius: 50%/46%;
   background:
     radial-gradient(ellipse at 50% 35%, rgba(245,166,35,0.08) 0%, rgba(0,0,0,0) 60%),
@@ -404,9 +471,9 @@ input:focus, select:focus {
   transform: translate(-50%, -50%);
   background: linear-gradient(180deg, var(--panel-3), var(--panel-2));
   border: 2px solid var(--team-color, #555);
-  border-radius: 14px;
-  padding: 10px 14px;
-  min-width: 104px;
+  border-radius: 12px;
+  padding: 6px 10px;
+  min-width: 86px;
   text-align: center;
   box-shadow: 0 6px 18px rgba(0,0,0,0.55);
   transition: transform 0.25s, box-shadow 0.25s;
@@ -426,17 +493,17 @@ input:focus, select:focus {
   50% { filter: brightness(1.25); }
 }
 .tt-code {
-  font-weight: 900; font-size: 1.2rem;
+  font-weight: 900; font-size: 1rem;
   color: var(--team-color, var(--text));
   letter-spacing: 1.5px;
   text-shadow: 0 2px 6px rgba(0,0,0,0.6);
 }
-.tt-name { font-size: 0.78rem; color: var(--text); margin-top: 2px; }
-.tt-stat { font-size: 0.68rem; color: var(--muted); }
+.tt-name { font-size: 0.7rem; color: var(--text); margin-top: 1px; }
+.tt-stat { font-size: 0.62rem; color: var(--muted); }
 .tt-tag {
-  margin-top: 5px;
-  font-size: 0.58rem; font-weight: 800;
-  padding: 2px 6px; border-radius: 4px;
+  margin-top: 3px;
+  font-size: 0.55rem; font-weight: 800;
+  padding: 1px 5px; border-radius: 4px;
   letter-spacing: 1px;
 }
 .leading-tag { background: var(--ok); color: #042; }
@@ -447,13 +514,13 @@ input:focus, select:focus {
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  width: 48%;
-  min-width: 280px;
-  max-width: 420px;
+  width: 46%;
+  min-width: 260px;
+  max-width: 400px;
   background: linear-gradient(180deg, #232b5c 0%, #12163a 100%);
   border: 2px solid var(--accent);
-  border-radius: 18px;
-  padding: 20px 22px;
+  border-radius: 16px;
+  padding: 14px 16px;
   box-shadow:
     0 0 60px rgba(245,166,35,0.28),
     0 24px 60px rgba(0,0,0,0.7),
@@ -475,26 +542,27 @@ input:focus, select:focus {
 .ac-top {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding-bottom: 14px;
+  gap: 12px;
+  padding-bottom: 10px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
+.ac-top .avatar { width: 56px !important; height: 56px !important; font-size: 20px !important; }
 .ac-avatar { box-shadow: 0 4px 20px rgba(0,0,0,0.6), inset 0 0 0 2px rgba(255,255,255,0.15); }
-.ac-label { letter-spacing: 2px; font-size: 0.68rem; }
-.ac-name { font-size: 1.35rem; font-weight: 800; margin: 2px 0; line-height: 1.1; }
-.ac-rating { color: var(--accent); font-size: 0.95rem; }
+.ac-label { letter-spacing: 2px; font-size: 0.64rem; }
+.ac-name { font-size: 1.15rem; font-weight: 800; margin: 2px 0; line-height: 1.1; }
+.ac-rating { color: var(--accent); font-size: 0.88rem; }
 
 .ac-bid-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 .ac-bid-col { text-align: left; }
 .ac-bid-amount {
-  font-size: 2.2rem;
+  font-size: 1.8rem;
   font-weight: 900;
   color: var(--accent);
   line-height: 1;
@@ -541,10 +609,10 @@ input:focus, select:focus {
 
 .bid-btn {
   width: 100%;
-  padding: 15px;
-  font-size: 1.05rem;
+  padding: 11px;
+  font-size: 0.98rem;
   letter-spacing: 1.5px;
-  border-radius: 12px;
+  border-radius: 10px;
 }
 
 /* ---------- Squad list ---------- */
@@ -552,11 +620,15 @@ input:focus, select:focus {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 16px;
+  padding: 12px;
   box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
-.squad h4 { margin: 0 0 12px; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); }
-.squad ul { list-style: none; padding: 0; margin: 0; max-height: 460px; overflow-y: auto; }
+.squad h4 { margin: 0 0 8px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); flex-shrink: 0; }
+.squad ul { list-style: none; padding: 0; margin: 0; flex: 1; min-height: 0; overflow-y: auto; }
 .squad-row {
   display: flex;
   align-items: center;
@@ -572,19 +644,23 @@ input:focus, select:focus {
 
 /* ---------- Sold screen ---------- */
 .sold-wrap {
-  display: flex;
+  display: flex !important;
   align-items: center;
   justify-content: center;
-  min-height: 540px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 .sold-card {
   background: linear-gradient(135deg, #1c2248 0%, #0a0e22 100%);
   border: 3px solid var(--ok);
   border-radius: 22px;
-  padding: 42px 64px;
+  padding: 24px 48px;
   text-align: center;
   animation: soldPop 0.45s cubic-bezier(0.18, 1.2, 0.3, 1.1);
   position: relative;
+  max-height: 100%;
+  overflow: auto;
 }
 @keyframes soldPop {
   0% { transform: scale(0.7) rotate(-3deg); opacity: 0; }
@@ -592,20 +668,20 @@ input:focus, select:focus {
   100% { transform: scale(1) rotate(0); opacity: 1; }
 }
 .sold-stamp {
-  font-size: 3.2rem;
+  font-size: 2.4rem;
   font-weight: 900;
   letter-spacing: 8px;
   color: var(--ok);
   text-shadow: 0 0 24px rgba(52,211,153,0.6), 0 4px 8px rgba(0,0,0,0.6);
-  margin-bottom: 14px;
+  margin-bottom: 8px;
 }
-.sold-avatar { margin: 0 auto 14px; }
-.sold-player { font-size: 2.2rem; font-weight: 800; margin-bottom: 4px; }
-.sold-rating { color: var(--accent); font-size: 1.05rem; margin-bottom: 16px; }
-.sold-to { font-size: 1.15rem; color: var(--muted); margin-bottom: 4px; }
-.sold-team { font-weight: 900; font-size: 2.2rem; letter-spacing: 3px; }
-.sold-user { color: var(--text); margin: 8px 0; font-size: 1rem; }
-.sold-amount { font-size: 2rem; font-weight: 800; color: var(--accent); margin: 14px 0; }
+.sold-avatar { margin: 0 auto 10px; }
+.sold-player { font-size: 1.7rem; font-weight: 800; margin-bottom: 2px; }
+.sold-rating { color: var(--accent); font-size: 0.95rem; margin-bottom: 10px; }
+.sold-to { font-size: 1rem; color: var(--muted); margin-bottom: 2px; }
+.sold-team { font-weight: 900; font-size: 1.7rem; letter-spacing: 3px; }
+.sold-user { color: var(--text); margin: 6px 0; font-size: 0.95rem; }
+.sold-amount { font-size: 1.6rem; font-weight: 800; color: var(--accent); margin: 8px 0; }
 
 /* ---------- Leaderboard ---------- */
 .leaderboard { list-style: none; padding: 0; margin: 16px 0 0; }
